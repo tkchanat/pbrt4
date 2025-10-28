@@ -1,6 +1,6 @@
 //! Data structures that can be deserialized from a parameter list.
 
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, default, str::FromStr};
 
 use crate::{
     param::{Param, ParamList, Spectrum},
@@ -301,13 +301,80 @@ pub enum Integrator {
 impl Integrator {
     pub fn new(ty: &str, params: ParamList) -> Result<Integrator> {
         let integ = match ty {
+            "ambientocclusion" => Integrator::AmbientOcclusion,
+            "bdpt" => Integrator::Bdpt,
+            "lightpath" => Integrator::LightPath,
+            "mlt" => Integrator::Mlt,
+            "path" => Integrator::Path,
+            "randomwalk" => Integrator::RandomWalk,
+            "simplepath" => Integrator::SimplePath,
+            "simplevolpath" => Integrator::SimpleVolPath,
+            "sppm" => Integrator::Sppm,
             "volpath" => Integrator::VolPath {
                 max_depth: params.integer("maxdepth", 5)?,
             },
-            _ => unimplemented!(),
+            _ => unimplemented!("Unsupported integrator type {ty}"),
         };
 
         Ok(integ)
+    }
+}
+
+#[derive(Debug)]
+pub enum PixelFilter {
+    Box {
+        xradius: f32,
+        yradius: f32,
+    },
+    Gaussian {
+        xradius: f32,
+        yradius: f32,
+        sigma: f32,
+    },
+    Mitchell {
+        xradius: f32,
+        yradius: f32,
+        b: f32,
+        c: f32,
+    },
+    Sinc {
+        xradius: f32,
+        yradius: f32,
+        tau: f32,
+    },
+    Triangle {
+        xradius: f32,
+        yradius: f32,
+    },
+}
+
+impl PixelFilter {
+    pub fn new(ty: &str, params: ParamList) -> Result<PixelFilter> {
+        let filter = match ty {
+            "box" => {
+                let xradius = params.float("xradius", 0.5)?;
+                let yradius = params.float("yradius", 0.5)?;
+                PixelFilter::Box { xradius, yradius }
+            }
+            "triangle" => {
+                let xradius = params.float("xradius", 0.5)?;
+                let yradius = params.float("yradius", 0.5)?;
+                PixelFilter::Triangle { xradius, yradius }
+            }
+            _ => unimplemented!("Unsupported pixel filter type {ty}"),
+        };
+
+        Ok(filter)
+    }
+}
+
+impl Default for PixelFilter {
+    fn default() -> Self {
+        Self::Gaussian {
+            xradius: 1.5,
+            yradius: 1.5,
+            sigma: 0.5,
+        }
     }
 }
 
@@ -519,23 +586,62 @@ impl Texture {
 
 /// Materials specify the light scattering properties of surfaces in the scene.
 #[derive(Debug)]
+pub enum MaterialType {
+    CoatedDiffuse,
+    CoatedConductor,
+    Conductor,
+    Dielectric,
+    Diffuse { reflectance: [f32; 3] },
+    DiffuseTransmission,
+    Hair,
+    Interface,
+    Measured,
+    Mix,
+    Subsurface,
+    ThinDielectric,
+}
+
+#[derive(Debug)]
 pub struct Material {
-    pub ty: String,
+    pub name: String,
+    pub ty: MaterialType,
 }
 
 impl Material {
     pub fn new(
         name: &str,
-        _params: ParamList,
+        params: ParamList,
         _texture_map: &HashMap<String, usize>,
     ) -> Result<Material> {
         // Parameters to materials are distinctive in that textures can be used to
         // specify spatially-varying values for the parameters.
-
-        // TODO: Parse material parameters.
+        let ty = match params.string("type") {
+            Some(ty) => match ty {
+                "coateddiffuse" => MaterialType::CoatedDiffuse,
+                "coatedconductor" => MaterialType::CoatedConductor,
+                "conductor" => MaterialType::Conductor,
+                "dielectric" => MaterialType::Dielectric,
+                "diffuse" => MaterialType::Diffuse {
+                    reflectance: params
+                        .get("reflectance")
+                        .ok_or(Error::InvalidParamType)?
+                        .rgb()?,
+                },
+                "diffusetransmission" => MaterialType::DiffuseTransmission,
+                "hair" => MaterialType::Hair,
+                "interface" => MaterialType::Interface,
+                "measured" => MaterialType::Measured,
+                "mix" => MaterialType::Mix,
+                "subsurface" => MaterialType::Subsurface,
+                "thindielectric" => MaterialType::ThinDielectric,
+                _ => return Err(Error::InvalidMaterialType),
+            },
+            None => return Err(Error::InvalidMaterialType),
+        };
 
         Ok(Material {
-            ty: name.to_string(),
+            name: name.to_string(),
+            ty,
         })
     }
 }

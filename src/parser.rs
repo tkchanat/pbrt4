@@ -43,7 +43,8 @@ pub enum Element<'a> {
         name: &'a str,
     },
     PixelFilter {
-        name: &'a str,
+        ty: &'a str,
+        params: ParamList<'a>,
     },
     Identity,
     /// `Translate x y z`
@@ -195,7 +196,8 @@ impl<'a> Parser<'a> {
                 name: self.read_str()?,
             },
             Directive::PixelFilter => Element::PixelFilter {
-                name: self.read_str()?,
+                ty: self.read_str()?,
+                params: self.read_param_list()?,
             },
             Directive::Identity => Element::Identity,
             Directive::Translate => Element::Translate {
@@ -370,6 +372,7 @@ impl<'a> Parser<'a> {
     /// - "integer indices" [ 0 1 2 0 2 3 ]
     /// - "float scale" [10]
     /// - "float iso" 150
+    /// - "string type" "diffuse"
     fn read_param(&mut self) -> Result<Param<'a>> {
         let type_and_name = self.read_str()?;
 
@@ -403,7 +406,10 @@ impl<'a> Parser<'a> {
         }
 
         let token = self.tokenizer.token(start, end);
-        let param = Param::new(type_and_name, token.value())?;
+        let param = match token.unquote() {
+            Some(value) => Param::new(type_and_name, value)?,
+            None => Param::new(type_and_name, token.value())?,
+        };
 
         Ok(param)
     }

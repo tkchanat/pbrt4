@@ -10,7 +10,7 @@ pub struct Token<'a> {
 
 impl<'a> Token<'a> {
     pub fn new(str: &'a str) -> Self {
-        Token { str }
+        Token { str: str.trim() }
     }
 
     /// Returns the number of chars in the token.
@@ -20,7 +20,7 @@ impl<'a> Token<'a> {
 
     /// Returns token's value.
     pub fn value(&self) -> &'a str {
-        self.str.trim()
+        self.str
     }
 
     /// Parse token.

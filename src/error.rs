@@ -81,6 +81,9 @@ pub enum Error {
     #[error("Unknown object type")]
     InvalidObjectType,
 
+    #[error("Unknown material type")]
+    InvalidMaterialType,
+
     #[error("Unexpted token received")]
     UnexpectedToken,
 

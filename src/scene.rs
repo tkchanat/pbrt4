@@ -8,7 +8,7 @@ use crate::{
     param::ParamList,
     types::{
         Accelerator, AreaLight, Camera, Film, Integrator, Light, Material, Medium, Options,
-        Sampler, Shape, Texture,
+        PixelFilter, Sampler, Shape, Texture,
     },
     Element, Error, Parser, Result,
 };
@@ -82,6 +82,7 @@ pub struct Scene {
     pub camera: Option<CameraEntity>,
     pub film: Option<Film>,
     pub integrator: Option<Integrator>,
+    pub pixel_filter: Option<PixelFilter>,
     pub accelerator: Option<Accelerator>,
     pub sampler: Option<Sampler>,
     pub textures: Vec<Texture>,
@@ -238,8 +239,10 @@ impl Scene {
                     let accelerator = Accelerator::new(ty, params)?;
                     scene.accelerator = Some(accelerator);
                 }
-                Element::PixelFilter { .. } => {
-                    todo!("Implement pixel filter");
+                Element::PixelFilter { ty, params } => {
+                    debug_assert!(scene.pixel_filter.is_none());
+                    let filter = PixelFilter::new(ty, params)?;
+                    scene.pixel_filter = Some(filter);
                 }
                 Element::ColorSpace { .. } => {
                     todo!("Support color space");
