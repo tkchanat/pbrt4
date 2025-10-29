@@ -1,6 +1,6 @@
 //! Data structures that can be deserialized from a parameter list.
 
-use std::{collections::HashMap, default, str::FromStr};
+use std::{collections::HashMap, str::FromStr};
 
 use crate::{
     param::{Param, ParamList, Spectrum},
@@ -475,7 +475,11 @@ impl Sampler {
 pub enum Light {
     /// The "distant" light source represents a directional light source "at infinity";
     /// In other words, it illuminates the scene with light arriving from a single direction.
-    Distant,
+    Distant {
+        spectrum: Option<Spectrum>,
+        from: [f32; 3],
+        to: [f32; 3],
+    },
     GonioPhotometric,
     /// The "infinite" light represents an infinitely far away light source that
     /// potentially casts illumination from all directions.
@@ -494,7 +498,11 @@ pub enum Light {
 impl Light {
     pub fn new(ty: &str, params: ParamList) -> Result<Light> {
         let light = match ty {
-            "distant" => Light::Distant,
+            "distant" => Light::Distant {
+                spectrum: params.get("L").map(|s| s.spectrum()).transpose()?,
+                from: params.get("from").ok_or(Error::InvalidParamType)?.rgb()?,
+                to: params.get("to").ok_or(Error::InvalidParamType)?.rgb()?,
+            },
             "goniometric" => Light::GonioPhotometric,
             "infinite" => Light::Infinite {
                 filename: params.string("filename").map(|f| f.to_owned()),
