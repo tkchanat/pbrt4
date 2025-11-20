@@ -597,9 +597,18 @@ impl Texture {
 pub enum MaterialType {
     CoatedDiffuse,
     CoatedConductor,
-    Conductor,
+    Conductor {
+        eta: [f32; 3],
+        k: [f32; 3],
+        roughness: f32,
+        uroughness: f32,
+        vroughness: f32,
+        remaproughness: bool,
+    },
     Dielectric,
-    Diffuse { reflectance: [f32; 3] },
+    Diffuse {
+        reflectance: [f32; 3],
+    },
     DiffuseTransmission,
     Hair,
     Interface,
@@ -627,7 +636,14 @@ impl Material {
             Some(ty) => match ty {
                 "coateddiffuse" => MaterialType::CoatedDiffuse,
                 "coatedconductor" => MaterialType::CoatedConductor,
-                "conductor" => MaterialType::Conductor,
+                "conductor" => MaterialType::Conductor {
+                    eta: params.get("eta").ok_or(Error::InvalidParamType)?.rgb()?,
+                    k: params.get("k").ok_or(Error::InvalidParamType)?.rgb()?,
+                    roughness: params.float("roughness", 0.0)?,
+                    uroughness: params.float("uroughness", 0.0)?,
+                    vroughness: params.float("vroughness", 0.0)?,
+                    remaproughness: params.boolean("remaproughness", true)?,
+                },
                 "dielectric" => MaterialType::Dielectric,
                 "diffuse" => MaterialType::Diffuse {
                     reflectance: params
