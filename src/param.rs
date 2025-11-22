@@ -26,6 +26,8 @@ pub enum ParamType {
     String,
     Texture,
     Normal,
+    Width0,
+    Width1,
 }
 
 impl FromStr for ParamType {
@@ -47,19 +49,23 @@ impl FromStr for ParamType {
             "string" => ParamType::String,
             "texture" => ParamType::Texture,
             "normal" => ParamType::Normal,
-            _ => return Err(Error::InvalidParamType),
+            "width0" => ParamType::Width0,
+            "width1" => ParamType::Width1,
+            _ => return Err(Error::InvalidParamType(s.to_string())),
         };
 
         Ok(ty)
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum Spectrum {
     //  "rgb L" [ r g b ]
     Rgb([f32; 3]),
     // "blackbody L" 3000
     Blackbody(i32),
+    // "texture reflectance" [ "Texture01" ]
+    Texture(String),
 }
 
 /// Represents a single parsed parameter.
@@ -115,7 +121,8 @@ impl<'a> Param<'a> {
         let res = match self.ty {
             ParamType::Rgb => Spectrum::Rgb(self.rgb()?),
             ParamType::Blackbody => Spectrum::Blackbody(self.single()?),
-            _ => return Err(Error::InvalidObjectType),
+            ParamType::Texture => Spectrum::Texture(self.value.to_string()),
+            _ => unreachable!(),
         };
 
         Ok(res)
@@ -195,6 +202,27 @@ impl<'a> ParamList<'a> {
 
     pub fn string(&self, name: &str) -> Option<&str> {
         self.get(name).map(|v| v.value)
+    }
+
+    pub fn spectrum(&self, name: &str, default: Spectrum) -> result::Result<Spectrum, Error> {
+        match self.get(name) {
+            Some(parm) => parm.spectrum(),
+            None => Ok(default),
+        }
+    }
+
+    pub fn rgb(&self, name: &str, default: [f32; 3]) -> result::Result<[f32; 3], Error> {
+        match self.spectrum(name, Spectrum::Rgb(default))? {
+            Spectrum::Rgb(rgb) => Ok(rgb),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn point3(&self, name: &str, default: [f32; 3]) -> result::Result<[f32; 3], Error> {
+        match self.floats(name)?.unwrap_or_default().try_into() {
+            Ok(point3) => Ok(point3),
+            Err(_) => Ok(default),
+        }
     }
 
     pub fn extend(&mut self, other: &ParamList<'a>) {

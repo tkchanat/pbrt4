@@ -5,7 +5,7 @@ use std::{collections::HashMap, env, fs, path::Path, slice, str};
 use glam::{Mat4, Vec3};
 
 use crate::{
-    param::ParamList,
+    param::{Param, ParamList},
     types::{
         Accelerator, AreaLight, Camera, Film, Integrator, Light, Material, Medium, Options,
         PixelFilter, Sampler, Shape, Texture,
@@ -145,6 +145,7 @@ impl Scene {
                 }
                 Err(err) => return Err(err),
             };
+            eprintln!("parse element: {element:?}");
 
             match element {
                 Element::AttributeBegin => {
@@ -345,7 +346,8 @@ impl Scene {
                 // shape definitions (until the end of the current attribute scope or until a new material is defined.
                 Element::Material { ty, mut params } => {
                     params.extend(&current_state.material_params);
-                    let material = Material::new(ty, params, &named_textures)?;
+                    params.add(Param::new("string type", ty)?)?;
+                    let material = Material::new("", params, &named_textures)?;
 
                     let index = scene.materials.len();
                     scene.materials.push(material);
@@ -361,10 +363,10 @@ impl Scene {
 
                     named_materials.insert(name.to_string(), index);
                 }
-                Element::NamedMaterial { name } => {
-                    // TODO: handle material not found case.
-                    current_state.material_index = named_materials.get(name).copied();
-                }
+                Element::NamedMaterial { name } => match named_materials.get(name) {
+                    Some(index) => current_state.material_index = Some(*index),
+                    None => unimplemented!("Material name: {name:?} not found"),
+                },
                 Element::LightSource { ty, params } => {
                     // When a light source is created, the current exterior medium is used for rays leaving the light
                     // when bidirectional light transport algorithms are used.

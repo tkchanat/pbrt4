@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use pbrt4::{
     param::Spectrum,
     types::{Camera, Light, Shape},
@@ -8,7 +10,8 @@ fn assert_eq_f32(a: f32, b: f32) {
     assert!(a - b <= f32::EPSILON, "{} != {}", a, b);
 }
 
-fn assert_eq_f32_arr<const N: usize>(a: [f32; N], b: [f32; N]) {
+fn assert_eq_f32_arr<const N: usize>(a: impl Borrow<[f32; N]>, b: impl Borrow<[f32; N]>) {
+    let (a, b) = (a.borrow(), b.borrow());
     for i in 0..N {
         assert_eq_f32(a[i], b[i])
     }
@@ -35,7 +38,7 @@ fn disney_cloud() {
             panic!("Unexpected light type at 0, want Infinite");
         };
 
-        let Spectrum::Rgb(rgb) = spectrum.unwrap() else {
+        let Spectrum::Rgb(rgb) = spectrum.as_ref().unwrap() else {
             panic!("Unexpected spectrum value type");
         };
 
@@ -45,7 +48,7 @@ fn disney_cloud() {
     // Distant light
     {
         let distant = &scene.lights[1];
-        assert!(matches!(distant, Light::Distant));
+        assert!(matches!(distant, Light::Distant { .. }));
     }
 
     assert_eq!(scene.materials.len(), 2);

@@ -504,7 +504,7 @@ Option \"string filename\" \"foo.exr\"
         ",
         );
 
-        let expected = Param::new("string filename", "\"foo.exr\"").unwrap();
+        let expected = Param::new("string filename", "foo.exr").unwrap();
 
         assert_eq!(
             parser.parse_next().unwrap(),

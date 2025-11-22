@@ -3,7 +3,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
-    param::{Param, ParamList, Spectrum},
+    param::{Param, ParamList, ParamType, Spectrum},
     Error, Result,
 };
 
@@ -463,7 +463,7 @@ impl Sampler {
             "sobol" => Sampler::Sobol,
             "stratified" => Sampler::Stratified,
             "zsobol" => Sampler::ZSobol,
-            _ => return Err(Error::InvalidObjectType),
+            _ => return Err(Error::InvalidObjectType(ty.to_string())),
         };
 
         Ok(sampler)
@@ -496,17 +496,19 @@ pub enum Light {
 }
 
 impl Light {
+    const ILLUMINANT: Spectrum = Spectrum::Rgb([1.0; 3]); // todo
+
     pub fn new(ty: &str, params: ParamList) -> Result<Light> {
         let light = match ty {
             "distant" => Light::Distant {
-                spectrum: params.get("L").map(|s| s.spectrum()).transpose()?,
-                from: params.get("from").ok_or(Error::InvalidParamType)?.rgb()?,
-                to: params.get("to").ok_or(Error::InvalidParamType)?.rgb()?,
+                spectrum: params.spectrum("L", Self::ILLUMINANT).ok(),
+                from: params.point3("from", [0.0, 0.0, 0.0])?,
+                to: params.point3("to", [0.0, 0.0, 1.0])?,
             },
             "goniometric" => Light::GonioPhotometric,
             "infinite" => Light::Infinite {
-                filename: params.string("filename").map(|f| f.to_owned()),
-                spectrum: params.get("L").map(|s| s.spectrum()).transpose()?,
+                filename: params.string("filename").map(|s| s.to_string()),
+                spectrum: params.spectrum("L", Self::ILLUMINANT).ok(),
             },
             "point" => Light::Point,
             "projection" => Light::Projection,
@@ -550,7 +552,7 @@ impl AreaLight {
     pub fn new(ty: &str, params: ParamList) -> Result<AreaLight> {
         // pbrt currently only includes a single area light implementation, "diffuse".
         if ty != "diffuse" {
-            return Err(Error::InvalidParamType);
+            return Err(Error::InvalidParamType(ty.to_string()));
         }
         Ok(AreaLight::Diffuse {
             filename: params.string("filename").map(|s| s.to_string()),
@@ -579,7 +581,7 @@ impl Texture {
         let ty = match ty {
             "spectrum" => TextureType::Spectrum,
             "float" => TextureType::Float,
-            _ => return Err(Error::InvalidObjectType),
+            _ => return Err(Error::InvalidObjectType(ty.to_string())),
         };
 
         // TODO: Parse parameters.
@@ -595,19 +597,26 @@ impl Texture {
 /// Materials specify the light scattering properties of surfaces in the scene.
 #[derive(Debug)]
 pub enum MaterialType {
-    CoatedDiffuse,
-    CoatedConductor,
-    Conductor {
-        eta: [f32; 3],
-        k: [f32; 3],
-        roughness: f32,
+    CoatedDiffuse {
+        reflectance: Spectrum,
         uroughness: f32,
         vroughness: f32,
         remaproughness: bool,
     },
-    Dielectric,
+    CoatedConductor,
+    Conductor {
+        eta: [f32; 3],
+        k: [f32; 3],
+        uroughness: f32,
+        vroughness: f32,
+        remaproughness: bool,
+    },
+    Dielectric {
+        eta: f32,
+        remaproughness: bool,
+    },
     Diffuse {
-        reflectance: [f32; 3],
+        reflectance: Spectrum,
     },
     DiffuseTransmission,
     Hair,
@@ -634,22 +643,33 @@ impl Material {
         // specify spatially-varying values for the parameters.
         let ty = match params.string("type") {
             Some(ty) => match ty {
-                "coateddiffuse" => MaterialType::CoatedDiffuse,
-                "coatedconductor" => MaterialType::CoatedConductor,
-                "conductor" => MaterialType::Conductor {
-                    eta: params.get("eta").ok_or(Error::InvalidParamType)?.rgb()?,
-                    k: params.get("k").ok_or(Error::InvalidParamType)?.rgb()?,
-                    roughness: params.float("roughness", 0.0)?,
+                "coateddiffuse" => MaterialType::CoatedDiffuse {
+                    reflectance: params.spectrum("reflectance", Spectrum::Rgb([0.5; 3]))?,
                     uroughness: params.float("uroughness", 0.0)?,
                     vroughness: params.float("vroughness", 0.0)?,
                     remaproughness: params.boolean("remaproughness", true)?,
                 },
-                "dielectric" => MaterialType::Dielectric,
+                "coatedconductor" => MaterialType::CoatedConductor,
+                "conductor" => MaterialType::Conductor {
+                    eta: params.rgb("eta", [0.236, 0.432, 1.1])?,
+                    k: params.rgb("k", [3.42, 3.13, 2.43])?,
+                    uroughness: params.float("uroughness", 0.0)?,
+                    vroughness: params.float("vroughness", 0.0)?,
+                    remaproughness: params.boolean("remaproughness", true)?,
+                },
+                "dielectric" => MaterialType::Dielectric {
+                    eta: {
+                        let parm = params.get("eta").ok_or(Error::MissingRequiredParameter)?;
+                        match parm.ty {
+                            ParamType::Float => parm.single()?,
+                            ParamType::Spectrum => todo!(),
+                            _ => unreachable!(),
+                        }
+                    },
+                    remaproughness: params.boolean("remaproughness", true)?,
+                },
                 "diffuse" => MaterialType::Diffuse {
-                    reflectance: params
-                        .get("reflectance")
-                        .ok_or(Error::InvalidParamType)?
-                        .rgb()?,
+                    reflectance: params.spectrum("reflectance", Spectrum::Rgb([0.5; 3]))?,
                 },
                 "diffusetransmission" => MaterialType::DiffuseTransmission,
                 "hair" => MaterialType::Hair,
@@ -658,9 +678,9 @@ impl Material {
                 "mix" => MaterialType::Mix,
                 "subsurface" => MaterialType::Subsurface,
                 "thindielectric" => MaterialType::ThinDielectric,
-                _ => return Err(Error::InvalidMaterialType),
+                _ => return Err(Error::InvalidMaterialType(ty.to_string())),
             },
-            None => return Err(Error::InvalidMaterialType),
+            None => return Err(Error::InvalidMaterialType("".to_string())),
         };
 
         Ok(Material {
@@ -672,6 +692,19 @@ impl Material {
 
 #[derive(Debug)]
 pub enum Shape {
+    /// Curve shape for hair, fur, and grass
+    Curve {
+        alpha: f32,
+        positions: Vec<f32>,
+        basis: String,
+        degree: i32,
+        ty: String,
+        normals: Option<Vec<f32>>,
+        width: f32,
+        width0: f32,
+        width1: f32,
+        splitdepth: i32,
+    },
     /// The "cylinder" is always oriented along the z axis.
     Cylinder {
         alpha: f32,
@@ -737,6 +770,18 @@ impl Shape {
         let alpha = params.float("alpha", 1.0)?;
 
         let shape = match ty {
+            "curve" => Shape::Curve {
+                alpha,
+                positions: params.floats("P")?.unwrap_or_default(),
+                basis: params.string("basis").unwrap_or("bezier").to_string(),
+                degree: params.integer("degree", 3)?,
+                ty: params.string("type").unwrap_or("flat").to_string(),
+                normals: params.floats("N")?,
+                width: params.float("width", 1.0)?,
+                width0: params.float("width0", 1.0)?,
+                width1: params.float("width1", 1.0)?,
+                splitdepth: params.integer("splitdepth", 3)?,
+            },
             "cylinder" => Shape::Cylinder {
                 alpha,
                 radius: params.float("radius", 1.0)?,
@@ -794,7 +839,7 @@ impl Shape {
 
                 Shape::PlyMesh { filename }
             }
-            _ => return Err(Error::InvalidObjectType),
+            _ => return Err(Error::InvalidObjectType(ty.to_string())),
         };
 
         Ok(shape)

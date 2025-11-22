@@ -57,8 +57,8 @@ pub enum Error {
     InvalidParamName,
 
     /// Unsupported parameter type.
-    #[error("Parameter type is invalid")]
-    InvalidParamType,
+    #[error("Parameter type is invalid: {0}")]
+    InvalidParamType(String),
 
     #[error("Found duplicated parameter")]
     DuplicatedParamName,
@@ -78,11 +78,11 @@ pub enum Error {
     #[error("Invalid camera type")]
     InvalidCameraType,
 
-    #[error("Unknown object type")]
-    InvalidObjectType,
+    #[error("Unknown object type: {0}")]
+    InvalidObjectType(String),
 
-    #[error("Unknown material type")]
-    InvalidMaterialType,
+    #[error("Unknown material type: {0}")]
+    InvalidMaterialType(String),
 
     #[error("Unexpted token received")]
     UnexpectedToken,
