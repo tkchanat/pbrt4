@@ -598,6 +598,11 @@ impl Texture {
 #[derive(Debug)]
 pub enum MaterialType {
     CoatedDiffuse {
+        albedo: Spectrum,
+        g: f32,
+        maxdepth: i32,
+        nsamples: i32,
+        thickness: f32,
         reflectance: Spectrum,
         uroughness: f32,
         vroughness: f32,
@@ -613,6 +618,8 @@ pub enum MaterialType {
     },
     Dielectric {
         eta: f32,
+        uroughness: f32,
+        vroughness: f32,
         remaproughness: bool,
     },
     Diffuse {
@@ -644,6 +651,11 @@ impl Material {
         let ty = match params.string("type") {
             Some(ty) => match ty {
                 "coateddiffuse" => MaterialType::CoatedDiffuse {
+                    albedo: params.spectrum("albedo", Spectrum::Rgb([0.0; 3]))?,
+                    g: params.float("g", 0.0)?,
+                    maxdepth: params.integer("maxdepth", 10)?,
+                    nsamples: params.integer("nsamples", 1)?,
+                    thickness: params.float("thickness", 0.01)?,
                     reflectance: params.spectrum("reflectance", Spectrum::Rgb([0.5; 3]))?,
                     uroughness: params.float("uroughness", 0.0)?,
                     vroughness: params.float("vroughness", 0.0)?,
@@ -666,6 +678,8 @@ impl Material {
                             _ => unreachable!(),
                         }
                     },
+                    uroughness: params.float("uroughness", 0.0)?,
+                    vroughness: params.float("vroughness", 0.0)?,
                     remaproughness: params.boolean("remaproughness", true)?,
                 },
                 "diffuse" => MaterialType::Diffuse {

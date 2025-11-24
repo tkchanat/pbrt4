@@ -145,7 +145,7 @@ impl Scene {
                 }
                 Err(err) => return Err(err),
             };
-            eprintln!("parse element: {element:?}");
+            // eprintln!("parse element: {element:?}");
 
             match element {
                 Element::AttributeBegin => {
